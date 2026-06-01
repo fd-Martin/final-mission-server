@@ -1,10 +1,9 @@
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-const express = require("express");
 require("dotenv").config();
-const cors = require("cors");
-
+const express = require("express");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 const admin = require("firebase-admin");
+const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -18,9 +17,7 @@ admin.initializeApp({
 });
 
 //middleware
-
 app.use(express.json());
-
 app.use(cors());
 
 //verify firebase token
@@ -55,9 +52,6 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
-
     const db = client.db("courier-dataBase");
     const usersCollection = db.collection("users");
     const booksCollection = db.collection("books");
@@ -80,7 +74,7 @@ async function run() {
     const verifyLibrarian = async (req, res, next) => {
       const query = { email: req.decoded_email };
       const user = await usersCollection.findOne(query);
-
+      // console.log(user);
       if (!user || user?.role !== "librarian") {
         return res.status(403).send({ message: "Forbidden Access" });
       }
@@ -88,7 +82,6 @@ async function run() {
     };
 
     //user related apis
-
     app.get("/users", verifyFBToken, verifyAdmin, async (req, res) => {
       const query = { role: req.query.role };
       const result = await usersCollection.find(query).toArray();
@@ -108,7 +101,7 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/users/:id", verifyFBToken, verifyAdmin, async (req, res) => {
+    app.patch("/users/:id", verifyFBToken, async (req, res) => {
       const query = { _id: new ObjectId(req.params.id) };
       const role = req.body;
       const updateDoc = {
@@ -128,7 +121,6 @@ async function run() {
     //book related apis
 
     // book for latest section
-
     app.get("/latest-books", async (req, res) => {
       const result = await booksCollection
         .find()
@@ -139,10 +131,9 @@ async function run() {
       res.send(result);
     });
     //books for user
-
     app.get("/all-books", async (req, res) => {
       const { status, searchText, limit, skip } = req.query;
-
+      console.log(searchText);
       const query = {};
       if (status) {
         query.status = status;
@@ -172,7 +163,6 @@ async function run() {
     });
 
     //books for admin
-
     app.get(
       "/all-books-admin",
       verifyFBToken,
@@ -204,7 +194,6 @@ async function run() {
     );
 
     //books for librarian
-
     app.get(
       "/books-library",
       verifyFBToken,
@@ -227,10 +216,10 @@ async function run() {
     app.post("/books", verifyFBToken, verifyLibrarian, async (req, res) => {
       const bookInfo = req.body;
       const book = {
-        bookName: bookInfo.bookName,
         authorName: bookInfo.authorName,
         authorEmail: bookInfo.authorEmail,
         authorPhoneNumber: bookInfo.authorPhoneNumber,
+        bookName: bookInfo.bookName,
         bookPhotoURL: bookInfo.bookPhotoURL,
         address: bookInfo.address,
         status: bookInfo.status,
@@ -245,15 +234,13 @@ async function run() {
       res.send(result);
     });
     //book details for user
-
     app.get("/book-details/:id", verifyFBToken, async (req, res) => {
       const query = { _id: new ObjectId(req.params.id) };
       const result = await booksCollection.findOne(query);
       res.send(result);
     });
 
-    //book details for liberian
-
+    //book details for librarian
     app.get(
       "/selected-book/:id",
       verifyFBToken,
@@ -264,7 +251,6 @@ async function run() {
         res.send(result);
       },
     );
-
     app.patch(
       "/book-details/:id",
       verifyFBToken,
@@ -291,7 +277,6 @@ async function run() {
         res.send(result);
       },
     );
-
     app.patch("/books", verifyFBToken, verifyAdmin, async (req, res) => {
       const { bookId, newStatus } = req.query;
       const query = { _id: new ObjectId(bookId) };
@@ -309,7 +294,6 @@ async function run() {
       const query = { _id: new ObjectId(id) };
 
       // Find the book first
-
       const book = await booksCollection.findOne(query);
 
       if (!book) {
@@ -317,11 +301,9 @@ async function run() {
       }
 
       // Delete the book
-
       const bookResult = await booksCollection.deleteOne(query);
 
       // Delete all related orders
-
       const orderResult = await ordersCollection.deleteMany({
         bookId: id,
       });
@@ -336,7 +318,6 @@ async function run() {
       const result = await ordersCollection.find(query).toArray();
       res.send(result);
     });
-
     app.get("/orders", verifyFBToken, verifyLibrarian, async (req, res) => {
       const query = { bookAuthorEmail: req.query.email };
       const result = await ordersCollection
@@ -345,7 +326,6 @@ async function run() {
         .toArray();
       res.send(result);
     });
-
     app.patch(
       "/orders/:id",
       verifyFBToken,
@@ -388,6 +368,7 @@ async function run() {
       const session = await stripe.checkout.sessions.create({
         line_items: [
           {
+            // Provide the exact Price ID (for example, price_1234) of the product you want to sell
             price_data: {
               currency: "usd",
               unit_amount: amount,
@@ -452,15 +433,13 @@ async function run() {
       res.send(result);
     });
 
-    //for map data
-
+    //for map
     app.get("/coverage", async (req, res) => {
       const result = await mapDataCollection.find().toArray();
       res.send(result);
     });
 
     //for count statics
-
     app.get("/all-data-count", async (req, res) => {
       const users = await usersCollection.countDocuments();
       const books = await booksCollection.countDocuments();
@@ -472,11 +451,10 @@ async function run() {
     });
 
     //for wishlist
-
     app.post("/user-wishlist", verifyFBToken, async (req, res) => {
       const { bookId, bookName, price, bookPhotoURL } = req.body;
       const userEmail = req.decoded_email;
-
+      // console.log("email:", userEmail);
       const wishlistQuery = {
         bookId,
         userEmail,
@@ -512,7 +490,7 @@ async function run() {
     });
 
     //REVIEW RELATED APIs
-
+    //for review permission
     app.get(
       "/book-review-permission/:bookId",
       verifyFBToken,
@@ -532,7 +510,6 @@ async function run() {
     );
 
     //get review
-
     app.get("/book-review/:bookId", async (req, res) => {
       const { bookId } = req.params;
       const query = { bookId: bookId };
@@ -541,7 +518,6 @@ async function run() {
     });
 
     //post review
-
     app.post("/book-review", async (req, res) => {
       const reviewInfo = req.body;
       reviewInfo.createdAt = new Date();
@@ -557,17 +533,22 @@ async function run() {
       );
       res.send(result);
     });
-  } finally {
-    // Ensures that the client will close when you finish/error
-    // await client.close();
+
+    // Send a ping to confirm a successful connection
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
+  } catch (error) {
+    console.log(error);
   }
 }
-run().catch(console.dir);
 
 app.get("/", async (req, res) => {
   res.send("book courier is working");
 });
-
 app.listen(port, () => {
   console.log(`App is listening from port ${port}`);
 });
+
+run();
